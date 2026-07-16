@@ -1,0 +1,386 @@
+I am redesigning my Python algorithmic trading platform from scratch.
+
+The project is called **Aether**.
+
+I want to design a production-grade architecture that can run continuously (24/7) on a Linux VPS and later scale to multiple servers if needed.
+
+The goal is not simply to build a trading bot, but to build a modular trading platform similar in architecture to professional trading systems.
+
+Current technologies I already use or intend to use include:
+
+• Python 3.13+
+• PyQt6 (desktop GUI)
+• asyncio
+• FastAPI
+• NATS JetStream (event bus / messaging)
+• TimescaleDB (historical storage)
+• Pydantic v2 + pydantic-settings
+• Prometheus
+• Telegram Bot API
+• Linux (Ubuntu)
+• systemd
+• Docker (where appropriate)
+
+I am open to replacing any technology if there is a better long-term alternative.
+
+The platform should support:
+
+- historical market data
+- live market data
+- multiple brokers
+- multiple data providers
+- multiple independent strategies
+- reinforcement learning agents
+- AI-assisted decision making
+- backtesting
+- paper trading
+- live trading
+- portfolio management
+- risk management
+- monitoring
+- scheduling
+- reporting
+
+The architecture must emphasize:
+
+- modularity
+- scalability
+- fault tolerance
+- high availability
+- event-driven communication
+- asynchronous programming
+- clear separation of responsibilities
+- testability
+- production readiness
+
+Please design the complete architecture.
+
+For every subsystem explain:
+
+1. Purpose
+2. Responsibilities
+3. Recommended Python libraries/frameworks
+4. Communication with other services
+5. Database usage
+6. Deployment method
+7. Failure recovery strategy
+8. Scaling strategy
+
+Please include recommendations for:
+
+- project folder structure
+- service boundaries
+- event bus design
+- message schemas
+- dependency injection
+- configuration management
+- logging
+- metrics
+- tracing
+- secrets management
+- Docker strategy
+- systemd usage
+- CI/CD
+- testing strategy
+- plugin architecture for strategies
+- AI integration
+- reinforcement learning integration
+- future cloud deployment
+
+Assume this project will continue growing for many years, 
+so optimize the architecture for maintainability rather than minimal code.
+
+I prefer clean architecture, 
+event-driven design, 
+domain-driven design where appropriate, 
+and modern Python best practices.
+
+Treat this as the architecture of a professional trading platform rather than a hobby trading bot.
+
+
+| Component           | Name                          | Responsibility                             |
+| ------------------- | ----------------------------- | ------------------------------------------ |
+| Platform            | **Aether**                    | Entire ecosystem                           |
+| Core                | **Nexus**                     | Event orchestration / service coordination |
+| AI                  | **Athena**                    | AI, LLMs, RL reasoning                     |
+| Scheduler           | **Chronos**                   | Scheduling & automation                    |
+| Market Data         | **Hermes**                    | Live/historical market data transport      |
+| Order Execution     | **Ares**                      | Order routing & execution                  |
+| Risk Engine         | **Themis**                    | Risk rules & compliance                    |
+| Portfolio           | **Atlas**                     | Portfolio & positions                      |
+| Backtesting         | **Mnemosyne**                 | Historical simulation                      |
+| Feature Engineering | **Daedalus**                  | Indicator & feature generation             |
+| Strategy Engine     | **Apollo**                    | Trading strategies                         |
+| Storage             | **Hestia**                    | Database abstraction                       |
+| Messaging           | **Iris**                      | Event bus (NATS)                           |
+| Monitoring          | **Argus**                     | Metrics & health monitoring                |
+| Reporting           | **Clio**                      | Reports & analytics                        |
+| Notifications       | **Echo**                      | Telegram/email/alerts                      |
+| Configuration       | **Oracle**                    | Configuration & secrets                    |
+| Plugins             | **Forge** (or **Hephaestus**) | Dynamic strategy/plugin loading            |
+| Broker Adapters     | **Poseidon**                  | Broker interfaces                          |
+| Market Scanner      | **Helios**                    | Universe scanning                          |
+| RL Environment      | **Odyssey**                   | RL environments & training                 |
+| Decision Validator  | **Nemesis**                   | Trade validation before execution          |
+
+
+I actually think your project has reached a point where it should stop being thought of as "a trading bot"
+and start being treated as a distributed software platform. 
+Looking at everything we've discussed over the past months—DuckDB/TimescaleDB, RL, NATS, FastAPI, PyQt, AI, backtesting, 
+VPS deployment—I would redesign it as a collection of independent services communicating through NATS rather than as one large application. 
+That architecture will make it much easier to add new strategies, brokers, AI components, or even additional machines in the future.
+
+
+Based on everything we've discussed over the past months, I wouldn't write another line of trading logic yet.
+
+Your biggest challenge is no longer how to trade—it's how to build a platform that can evolve for years. 
+Every time we've solved one problem (RL observations, WebSocket integration, CSV vs. DuckDB, AI validation), 
+another architectural limitation appeared. That's a sign the foundation needs to come first.
+
+Phase 1 — Freeze the Vision
+produce an Architecture Decision Record (ADR) that answers questions like:
+
+What is Aether?
+What is Nexus responsible for?
+What are the service boundaries?
+What technologies are mandatory?
+What principles will every module follow?
+
+This document becomes the project's "constitution."
+
+Phase 2 — Define the Domains
+
+Forget Python classes for a moment.
+
+Draw the major domains:
+
+                 Aether Platform
+
+          +-------------------------+
+          |        Nexus            |
+          +-------------------------+
+
+      Hermes     Apollo     Athena
+      Market     Strategy      AI
+
+         |           |          |
+
+      Themis      Ares      Atlas
+       Risk     Execution Portfolio
+
+         |
+
+      Hestia
+      Storage
+
+         |
+
+      Argus
+     Monitoring
+
+If you can explain each box in one sentence, the architecture is probably at the right level.
+
+Phase 3 — Choose Communication Patterns
+
+Not everything should communicate the same way.
+
+For example:
+
+Commands
+
+ExecuteOrder
+CancelOrder
+ReloadStrategy
+
+Events
+
+MarketTickReceived
+SignalGenerated
+OrderFilled
+RiskLimitExceeded
+PositionClosed
+
+Queries
+
+GetPortfolio
+GetOpenOrders
+GetLatestPrice
+
+Separating these concepts early avoids tangled dependencies later.
+
+Phase 4 — Build the Skeleton First
+
+I would create the directory structure before implementing any trading logic.
+
+aether/
+
+    services/
+        nexus/
+        hermes/
+        apollo/
+        ares/
+        themis/
+        atlas/
+        athena/
+        chronos/
+        argus/
+        hestia/
+
+    shared/
+        events/
+        models/
+        schemas/
+        messaging/
+        config/
+        utils/
+
+    plugins/
+        brokers/
+        strategies/
+        indicators/
+
+    infrastructure/
+        docker/
+        systemd/
+        prometheus/
+
+    docs/
+
+    tests/
+
+Notice that there is almost no business logic yet—just clear organization.
+
+Phase 5 — Define Contracts
+
+Before writing services, define the messages they exchange.
+
+For example:
+
+MarketTick
+
+symbol
+timestamp
+bid
+ask
+last
+volume
+provider
+Signal
+
+strategy
+symbol
+action
+confidence
+reason
+features
+OrderRequest
+
+broker
+symbol
+side
+quantity
+order_type
+
+If every service speaks the same language, replacing implementations becomes much easier.
+
+Phase 6 — Build Infrastructure Before Features
+
+Get the platform itself working:
+
+configuration loading
+logging
+NATS connectivity
+TimescaleDB connection
+health checks
+metrics
+service lifecycle
+graceful shutdown
+
+It's much easier to debug a strategy when the infrastructure is already solid.
+
+Phase 7 — Build One Vertical Slice
+
+Instead of building all services at once, complete one end-to-end workflow:
+
+Market Data
+
+↓
+
+Signal
+
+↓
+
+Risk Check
+
+↓
+
+Paper Execution
+
+↓
+
+Portfolio Update
+
+↓
+
+Dashboard
+
+This proves the architecture works before adding complexity.
+
+Phase 8 — Add Intelligence Last
+
+Only after the platform is stable would I add:
+
+reinforcement learning
+LLM reasoning
+prediction validation
+feature engineering
+ensemble models
+online learning
+
+AI should consume the platform, not define it.
+
+The Technology Stack I Would Choose
+Layer	Technology
+GUI			PyQt6
+APIs		FastAPI
+Async		asyncio
+Event Bus	NATS JetStream
+Configuration	pydantic-settings
+Validation	Pydantic v2
+Historical DB	TimescaleDB
+Cache	Redis (optional but useful)
+Metrics		Prometheus
+Dashboards	Grafana
+Logs		structlog + standard logging
+Service Management	systemd
+Containers	Docker (per service where it adds value)
+Reverse Proxy	Nginx or Caddy
+Testing		pytest
+Dependency Management	uv
+Code Quality	Ruff + mypy
+Packaging	Hatchling or uv build
+
+I am open to replacing any technology if there is a better long-term alternative.
+
+
+My biggest recommendation
+If I were acting as the lead architect on Aether, I would treat it as an operating system for trading, not as a trading application.
+The strategies become plugins.
+The AI becomes a plugin.
+The broker adapters become plugins.
+Even the backtester becomes another service that speaks the same event protocol as live trading.
+That means a strategy shouldn't know whether it's running against:
+
+historical data,
+paper trading,
+live markets,
+or a simulation.
+
+It simply receives market events and emits trading decisions. 
+Everything else—the data source, execution, storage, and monitoring—is handled by the platform. 
+This separation will make Aether easier to extend, test, and maintain as it grows.
+
+
+
+Phase 1 —
+Produce an Architecture Decision Record (ADR) that summaries all the above:
