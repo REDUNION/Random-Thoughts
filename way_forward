@@ -1,0 +1,66 @@
+# Aether — Open items
+
+Updated: 2026-07-21
+
+See `docs/STATUS.md` for running services, validated milestones, and out-of-scope list.
+
+## ADR-005 follow-up (2026-07-20)
+
+- `ensure_consumer` now recreates stale **push-mode** durables (`deliver_subject` set) as pull consumers; fixes vertical slice after dev sessions that used push subscribe against the same durable names.
+- `ConsumerConfig.ack_wait` must be passed in **seconds** (nats-py serializes to ns internally); nanosecond literals broke consumer recreation on drift.
+- `PullMessageConsumer` treats `asyncio.TimeoutError` as a normal fetch timeout (same as `NatsTimeoutError`).
+
+## Infrastructure ahead of code (intentional deferrals)
+
+- **Redis** — provisioned in Compose (`redis_url` in settings only); no application client yet. Trigger: first service that needs caching or pub-sub.
+- **LimitExceeded consumer** — Themis emits `evt.risk.limit_exceeded.v1`; no subscriber yet. Trigger: `[SB-Nemesis]` risk observability / alerting service.
+
+---
+
+## NEXT: ADR-006 — Hermes replay provider ingest (`[P-4]` sample)
+
+**Goal:** Self-driving vertical slice — `docker compose up` + replay file → portfolio updates without `publish_test_tick.py`.
+
+### Problem today
+
+- Ticks enter via host script → JetStream directly (bypasses Hermes ingest seam).
+- `MarketTickPublisher` exists but is unwired; `TickConsumer` is the only active Hermes path.
+- If provider calls `MarketTickPublisher.publish()` as-is (save + emit), `TickConsumer` would **double-persist** the same tick to Hestia.
+
+### Frozen decisions (proposed for ADR-006)
+
+1. **Single persistence path:** `TickConsumer` remains the sole Hestia writer for all bus ticks. Provider adapters emit to JetStream only (refactor `MarketTickPublisher.publish()` → emit-only, or split `emit_tick()` vs deprecated save+emit).
+2. **Plugin convention** (mirror Apollo/Forge): `plugins.providers.{name}` → `{Name}Provider`, loaded via `shared/plugins/provider_loader.py` + `HERMES_PROVIDER` env (default `none` for backward compat).
+3. **First adapter:** `replay` — reads CSV/JSONL of `MarketTick` rows, publishes on an interval (`HERMES_REPLAY_FILE`, `HERMES_REPLAY_INTERVAL_SECONDS`, optional loop).
+4. **Hermes startup:** When `HERMES_PROVIDER != none`, start provider asyncio task after NATS connect; always keep `TickConsumer` running. Register stop on shutdown.
+5. **Sample data:** Ship `data/samples/replay_aapl_vertical_slice.csv` with ~5 ticks including one above buy threshold (100.15).
+6. **Compose:** Mount sample file; set Hermes env for replay mode in dev profile or documented `.env` block (opt-in, not forced on all users).
+7. **Out of scope:** Live WebSocket feeds, Redis, new services, real broker.
+
+### Implementation checklist
+
+| # | Task | Files (expected) |
+|---|---|---|
+| 1 | Draft `docs/adr/ADR-006-hermes-replay-provider.md` (Accept after verify) | docs/adr/ |
+| 2 | `ProviderPlugin` protocol + `load_provider()` | shared/plugins/provider_loader.py |
+| 3 | `ReplayProvider` (CSV parse, async loop, emit via publisher) | plugins/providers/replay.py |
+| 4 | Refactor `MarketTickPublisher` to emit-only; update tests | services/hermes/publisher.py, tests/test_hermes_publisher.py |
+| 5 | Wire provider + publisher in Hermes DI; start/stop in `HermesService` | container.py, service.py |
+| 6 | Settings: `hermes_provider`, `hermes_replay_file`, `hermes_replay_interval_seconds` | shared/config/settings.py, .env.example |
+| 7 | Sample CSV + optional Compose env block | data/samples/, docker-compose.yml |
+| 8 | Tests: replay parser, provider loop (mock), Hermes start with provider=none unchanged | tests/test_replay_provider.py, tests/test_hermes_service.py |
+| 9 | Update `manual-e2e-test.md` §5 (replay path + keep script as alternate) | docs/runbooks/ |
+| 10 | Update `HOW_TO_USE.md`, `STATUS.md`; remove “Hermes provider ingest (future)” above | docs/ |
+
+### Verification (same bar as ADR-005)
+
+- `uv run pytest -q`, ruff, mypy clean
+- `docker compose up -d --build` → 11/11 healthy
+- With `HERMES_PROVIDER=replay`: wait ~10s → `/portfolio` shows AAPL without manual publish
+- Correlation ID visible in Hermes `tick_published` → Apollo `signal_generated` → … → Ares `order_filled`
+- With `HERMES_PROVIDER=none` (default): existing script-based E2E still passes
+
+### Graduation criteria
+
+- ADR-006 accepted; replay is documented opt-in dev sample
+- `publish_test_tick.py` retained as manual/debug tool, not removed
